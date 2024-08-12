@@ -239,28 +239,8 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
-// Update profile
-router.put('/profile', verifyToken, async (req, res) => {
-  const { username, password, userType } = req.body;
 
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ error: 'User not found' });
 
-    user.username = username;
-    user.userType = userType;
-
-    if (password) {
-      user.password = await bcrypt.hash(password, 10);
-    }
-
-    await user.save();
-    res.json({ message: 'Profile updated successfully' });
-  } catch (error) {
-    console.error('Error updating profile:', error);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
 router.put('/tasks/:taskId/status', verifyToken, async (req, res) => {
   const { taskId } = req.params;
   const { status } = req.body;
@@ -329,19 +309,6 @@ router.get('/projects/:projectId/tasks', verifyToken, async (req, res) => {
 
 
 
-router.get('/:taskId',verifyToken, async (req, res) => {
-  try {
-    const task = await Task.findById(req.params.taskId);
-    if (!task) return res.status(404).json({ error: 'Task not found' });
-    res.json(task);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-
-
 router.get('/tasks/:taskId',verifyToken, async (req, res) => {
   try {
     const task = await Task.findById(req.params.taskId);
@@ -379,17 +346,35 @@ router.post('/tasks/:taskId/feedback',verifyToken, async (req, res) => {
   }
 });
 
-router.get("/task-feedback", verifyToken, async (req, res) => {
-  console.log("trdfggg")
+router.get('/feedback/user', verifyToken, async (req, res) => {
   try {
-    console.log("test")
-    const feedbacks = await Feedback.find({ assignedTo: req.username });
-    if (!feedbacks || feedbacks.length === 0) {
-      return res.status(404).send({ message: "No feedback" });
+    // Fetch the logged-in user
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
     }
+
+    // Fetch tasks assigned to the logged-in user
+    const tasks = await Task.find({ assignedTo: user.username });
+    
+    if (tasks.length === 0) {
+      return res.status(404).json({ message: 'No tasks found for this user' });
+    }
+
+    // Extract task IDs from the tasks
+    const taskIds = tasks.map(task => task._id);
+
+    // Fetch feedbacks for these task IDs
+    const feedbacks = await Feedback.find({ taskId: { $in: taskIds } }).select('-taskId');
+
+    if (feedbacks.length === 0) {
+      return res.status(404).json({ message: 'No feedback found for this user' });
+    }
+
     res.status(200).json(feedbacks);
-  } catch (err) {
-    res.status(500).send({ message: "Internal Server Error" });
+  } catch (error) {
+    console.error('Error fetching feedbacks:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
@@ -420,53 +405,5 @@ router.get('/projects/:projectId/monthly-report', verifyToken, async (req, res) 
   }
 });
 
-router.put('/projects/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
 
-  
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: 'Invalid or missing Project ID' });
-    }
-
-    const updatedProject = await Project.findByIdAndUpdate(id, req.body, { new: true });
-    
-   
-    if (!updatedProject) {
-      return res.status(404).json({ message: 'Project not found' });
-    }
-
-  
-    res.json(updatedProject);
-  } catch (error) {
-    console.error('Error updating project:', error);
-    res.status(500).json({ message: 'Failed to update project' });
-  }
-});
-
-router.put('/projects/:id', async (req, res) => {
-  const { id } = req.params;
-  const { name, description, invitestaff } = req.body; 
-
-  try {
-   
-    const project = await Project.findById(id);
-    if (!project) {
-      return res.status(404).json({ message: 'Project not found' });
-    }
-
-   
-    project.name = name;
-    project.description = description;
-    project.invitestaff = invitestaff.map(staff => ({
-      username: staff.username,
-      createdAt: staff.createdAt
-    }));
-
-    const updatedProject = await project.save();
-    res.json(updatedProject);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
 module.exports = router;
